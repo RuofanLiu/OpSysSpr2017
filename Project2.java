@@ -20,11 +20,6 @@ public class Project2 {
 	}
 
 	public Project2(){
-		frame = new ArrayList<String>();
-		process = new LinkedList<String>();
-		comparator = new TimeComparator();
-		processQueue = new PriorityQueue<Process>(32, comparator);
-		FrequencyMap = new HashMap<String, Integer>();
-		processMap = new HashMap<String, Process>();
+
 	}
 }
