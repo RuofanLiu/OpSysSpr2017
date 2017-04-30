@@ -6,7 +6,7 @@ public class Process {
 	/* Process ID */
 	private final String pid;
 	/* The size of each frame;*/
-	private final int numberOfFrame;
+	private final int numberOfFrames;
 	/* Time interval [arr_time0, run_time0, arr_time1, run_time1, ... , arr_timeN, run_timeN] */
 	private ArrayList<Integer> timeList;
 	/* Represents whether a process is entering (true)/exiting (false)*/
@@ -14,12 +14,12 @@ public class Process {
 	
 	/**
 	 * @param pid: process id
-	 * @param numberOfFrame: number of frames for the given process
+	 * @param numberOfFrames: number of frames for the given process
 	 * @effects initializes fields
 	 */
-	public Process(String pid, int numberOfFrame){
+	public Process(String pid, int numberOfFrames){
 		this.pid = pid;
-		this.numberOfFrame = numberOfFrame;
+		this.numberOfFrames = numberOfFrames;
 		timeList = new ArrayList<Integer>();
 		status = true;
 	}
@@ -30,7 +30,7 @@ public class Process {
 	 */
 	public Process(Process p){
 		pid = p.pid;
-		numberOfFrame = p.numberOfFrame;
+		numberOfFrames = p.numberOfFrames;
 		timeList = new ArrayList<Integer>();
 		for(int i = 0; i < p.timeList.size(); i++){
 			timeList.add(p.timeList.get(i).intValue());
@@ -49,7 +49,7 @@ public class Process {
 	 * @return number of frames for the given process
 	 */
 	public int getNumOfFrame(){
-		return numberOfFrame;
+		return numberOfFrames;
 	}
 	
 	/**
@@ -69,13 +69,15 @@ public class Process {
 	/**
 	 * @param s: status of process
 	 * @effects sets status of process to s
+	 * @modifies status field
 	 */
 	public void setStatus(boolean s){
 		status = s;
 	}
 	
 	/**
-	 *  @effects sets status of process to the opposite value and removes next time from list  
+	 *  @effects sets status of process to the opposite value and removes next time from list
+	 *  @modifies removes time from timeList field  
 	 */ 
 	public int pop(){
 		status = !status;
@@ -100,6 +102,7 @@ public class Process {
 	 * @param currentTime: time after fragmentation
 	 * @param defragTime: total defragmentation time
 	 * @effects adds duration time to all times in list
+	 * @modifies timeList field
 	 */
 	public void addDefragTime(int currentTime, int defragTime){
 		int index = 0;
@@ -136,7 +139,7 @@ public class Process {
 	public boolean equals(Object obj) {
 		if(obj instanceof Process){
 			Process p = (Process) obj;
-			return this.pid.equals(p.pid) && this.numberOfFrame == p.numberOfFrame;
+			return this.pid.equals(p.pid) && this.numberOfFrames == p.numberOfFrames;
 		}
 		return false;
 	}
