@@ -30,11 +30,16 @@ public class Project2 {
 	private static final int t_menmove = 1;
 	Comparator<Process> timeComparator;
 	Comparator<ContiguousProcess> memoryComparator;
+	public static int AVAILABLE_FRAMES = 256;
+	private ArrayList<Event> eventList;
+	private HashMap<String, Process> processMap;
 	
 	public Project2(){
 		timeComparator = new TimeComparator();
 		memoryComparator = new MemoryComparator();
 		processQueue = new PriorityQueue<Process>(32, timeComparator);
+		eventList = new ArrayList<Event>();
+		processMap = new HashMap<String, Process>();
 	}
 	
 	/**
@@ -444,5 +449,120 @@ public class Project2 {
 		}
 		
 		System.out.println("time " + time + "ms: Simulator ended (Contiguous -- Best-Fit)");
+	}
+	
+	/**
+	 * the function parse data from the input text file (only for non-contiguous physical memory)
+	 * @param filename: the filename to be read
+	 * @throws IOException
+	 */
+	public void parseDataPM2(String filename) throws IOException{
+		BufferedReader reader = new BufferedReader(new FileReader(filename));
+		String line = reader.readLine();
+		while((line = reader.readLine()) != null){
+			String[] token = line.split("/|\\ ");
+			Process p = new Process(token[0], Integer.parseInt(token[1]));
+			for(int i = 2; i < token.length; i++){	// this for loop adds the time interval to the ArrayList returned by the process class
+				if(i % 2 == 0){
+					p.getTimeList().add(Integer.parseInt(token[i]));
+				}
+				else{
+					p.getTimeList().add((Integer.parseInt(token[i]) + Integer.parseInt(token[i - 1])));
+				}
+			}
+			p.setStatus(true); //this line sets the initial process of a process to true, since it will enter the memory (please change the status whenever the process exits the memory)
+			processMap.put(token[0], p);	//add the element to the map, the key is the process ID, and the value is an object of Process class.
+		}
+		Iterator<String> it = processMap.keySet().iterator();
+		while (it.hasNext()){
+			Object key = it.next();
+			Process currentEntry = processMap.get(key);
+			for(int i = 0; i < currentEntry.getTimeList().size(); i++){
+				eventList.add(new Event((String)key, currentEntry.getTimeList().get(i), 1-i%2, currentEntry.getNumOfFrame()));
+			}
+		}
+		reader.close();
+	}
+
+	/**
+	 * this is a helper function that deletes the inactive process from the memory
+	 * @param eventList: an ArrayList of events that stores the status of the memory
+	 * @param currentID: the current ID to be compared with
+	 * @param currentTime: the current time to be compared with
+	 */
+	private void deleteEvent(ArrayList<Event> eventList, String currentID, int currentTime){
+		for (int j = 0; j < eventList.size(); j++){
+			if (eventList.get(j).getID().equals(currentID) && eventList.get(j).getTime() > currentTime && eventList.get(j).getStatus() == 0){
+				eventList.get(j).setSkipped(true);
+				break;
+			}
+		}
+	}
+	
+	/**
+	 * This is a helper function that prints out the overview of a memory
+	 * @param frameList: an ArrayList of strings that represents the memory
+	 */
+	private void printMemory(ArrayList<String> frameList){
+		System.out.println("================================");
+		for (int l = 0; l < frameList.size(); l++){
+			System.out.print(frameList.get(l));
+			if ((l+1) % 32 == 0){
+				System.out.println();
+			}
+		}
+		System.out.println("================================");
+	}
+	
+	/**
+	 * This is the main method that does the simulation
+	 */
+	public void firstFitNonContiguous(){
+		//sort the list before simulation
+		Comparator<Event> myComparator = new MyComparator();
+		Collections.sort(eventList, myComparator);
+		int replaced;
+		ArrayList<String> frameList = new ArrayList<String>();	//frameList is a list that represents the frames in the memory
+		for (int l = 0; l < 256; ++l){
+			frameList.add(".");
+		}
+		System.out.println("time 0ms: Simulator started (Non-contiguous)");
+		for (int i = 0; i < eventList.size(); i++){
+			if (eventList.get(i).getSkipped() == true){
+				continue;
+			}
+			if (eventList.get(i).getStatus() == 1){
+				System.out.println("time "+ eventList.get(i).getTime()+"ms: Process "+ eventList.get(i).getID()+" arrived (requires "+ eventList.get(i).getFrames() + " frames)");
+				if (eventList.get(i).getFrames() <= AVAILABLE_FRAMES){
+					System.out.println("time "+ eventList.get(i).getTime()+"ms: Placed process "+ eventList.get(i).getID() + ":");
+					replaced = 0;
+					AVAILABLE_FRAMES -= eventList.get(i).getFrames();
+					for (int j = 0; j < frameList.size(); j++){
+						if ( frameList.get(j).equals(".")){
+							if (replaced < eventList.get(i).getFrames()){
+								frameList.set(j, eventList.get(i).getID());
+								replaced += 1;
+							}
+						}
+					}
+					printMemory(frameList);
+				}
+				else{
+					System.out.println("time "+eventList.get(i).getTime()+"ms: Cannot place process "+ eventList.get(i).getID() + " -- skipped!");
+					deleteEvent(eventList,eventList.get(i).getID(),eventList.get(i).getTime());
+				}
+			}
+			else{
+				for (int h = 0; h < frameList.size(); h++){
+					if (frameList.get(h).equals(eventList.get(i).getID())){
+						frameList.set(h, ".");
+					}
+				}
+				System.out.println("time "+eventList.get(i).getTime()+"ms: Process "+ eventList.get(i).getID() + " removed:");
+				printMemory(frameList);
+				AVAILABLE_FRAMES += eventList.get(i).getFrames();
+			}
+		}
+		System.out.println("time "+ eventList.get(eventList.size()-1).getTime() + "ms: Simulator ended (Non-contiguous)");
 	}
 }
