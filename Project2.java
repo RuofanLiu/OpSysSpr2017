@@ -16,7 +16,11 @@ public class Project2 {
 		Project2 p = new Project2();
 		// Contiguous Memory
 		p.parseDataPM(args[0]);
+		
 		p.nextFit();
+		System.out.println();
+		
+		p.bestFit();
 	}
 	
 	private PriorityQueue<Process> processQueue;
@@ -24,11 +28,13 @@ public class Project2 {
 	private static final int FRAMES_PER_LINE = 32;
 	private static final int FRAMES_TOTAL = 256;
 	private static final int t_menmove = 1;
-	Comparator<Process> comparator;
+	Comparator<Process> timeComparator;
+	Comparator<ContiguousProcess> memoryComparator;
 	
 	public Project2(){
-		comparator = new TimeComparator();
-		processQueue = new PriorityQueue<Process>(32, comparator);
+		timeComparator = new TimeComparator();
+		memoryComparator = new MemoryComparator();
+		processQueue = new PriorityQueue<Process>(32, timeComparator);
 	}
 	
 	/**
@@ -73,9 +79,6 @@ public class Project2 {
 			ContiguousProcess cp = itrMem.next();
 			sbTemp.replace(cp.getStartFrame(), cp.getEndFrame() + 1,
 					new String(new char[(cp.getEndFrame() + 1) - cp.getStartFrame()]).replace("\0", cp.getPid()));
-//			ContiguousProcess c = itrMem.next();
-//			sbTemp.replace(c.getStartFrame(), c.getEndFrame()+1, 
-//					new String(new char[(c.getEndFrame()+1)-c.getStartFrame()]).replace("\0", c.getPid()));
 		}
 		
 		while (sbTemp.length() != 0) {
@@ -135,10 +138,10 @@ public class Project2 {
 	public void nextFit() {
 		int time = 0;
 		int amtMemUsed = 0;
-		PriorityQueue<Process> processQueue = new PriorityQueue<Process>(this.processQueue.size(), new TimeComparator());
+		PriorityQueue<Process> processQueue = new PriorityQueue<Process>(this.processQueue.size(), this.timeComparator);
 		int lastUsedIndex = 0;
 		
-		mMemorySet = new TreeSet<>(new MemoryComparator());
+		mMemorySet = new TreeSet<>(memoryComparator);
 		
 		List<ContiguousProcess> contiguousList = new LinkedList<>();
 		for (Process process : this.processQueue) {
@@ -162,8 +165,6 @@ public class Project2 {
 					cp.pop(); cp.pop();
 				}
 			}
-			
-			
 			
 			time = cp.peek();
 			/* Placement Algorithm */
@@ -304,5 +305,144 @@ public class Project2 {
 		}
 		
 		System.out.println("time " + time + "ms: Simulator ended (Contiguous -- Next-Fit)");
+	}
+	
+	public void bestFit() {
+		int time = 0;
+		int amtMemUsed = 0;
+		PriorityQueue<Process> processQueue = new PriorityQueue<Process>(this.processQueue.size(), this.timeComparator);
+		mMemorySet = new TreeSet<>(memoryComparator);
+		
+		List<ContiguousProcess> contiguousList = new LinkedList<>();
+		for (Process process : this.processQueue) {
+			contiguousList.add(new ContiguousProcess(process));
+		}		
+		
+		processQueue.addAll(contiguousList);
+		
+		System.out.println("time " + time + "ms: Simulator started (Contiguous -- Best-Fit)");
+		ContiguousProcess cp;
+		
+		while (processQueue.peek() != null) {
+			cp = (ContiguousProcess) processQueue.poll();
+			
+			boolean isEntering = cp.getStatus();
+			while (cp.peek() < time) {
+				System.out.println("time " + time + "ms: Cannos place process " + cp.getPid() + " -- skippped!");
+				cp.pop(); cp.pop();
+				
+				printPhysicalMemory(mMemorySet);
+			}
+			
+			time = cp.peek();
+			
+			/* Placement Algorithm */
+			if (isEntering) {
+				System.out.println("time " + time + "ms: Process " + cp.getPid() + " arrived (requires " + cp.getNumOfFrame() + " frames)");
+				
+				int lastEmptyIndex = 0;
+				int smallestSize = -1;
+				int smallestIndex = -1;
+				Iterator<ContiguousProcess> itrMem = mMemorySet.iterator();
+				boolean isPlaced = false;
+				ContiguousProcess cpSmallest = null;
+				ContiguousProcess cpTemp = null;
+				
+				while (itrMem.hasNext()) {
+					cpTemp = itrMem.next();
+					int amtFreeSpace = cpTemp.getStartFrame() - lastEmptyIndex;
+					if (amtFreeSpace >= cp.getNumOfFrame()) {
+						if ((smallestSize == -1) || (smallestSize > amtFreeSpace)) {
+							smallestSize = amtFreeSpace;
+							smallestIndex = lastEmptyIndex;
+							cpSmallest = cp;
+						}
+						isPlaced = true;
+					}
+					
+					lastEmptyIndex = cpTemp.getEndFrame() + 1;
+				}
+				
+				int amtFreeSpace = FRAMES_TOTAL - lastEmptyIndex;
+				if (amtFreeSpace >= cp.getNumOfFrame()) {
+					if ((smallestSize == -1) || (smallestSize > amtFreeSpace)) {
+						smallestSize = amtFreeSpace;
+						smallestIndex = lastEmptyIndex;
+						cpSmallest = cp;
+					}
+					isPlaced = true;
+				}
+				
+				/* Place Process */
+				if (isPlaced) {
+					amtMemUsed = placeProcess(amtMemUsed, time, cpSmallest, smallestIndex);
+				}
+				else {
+					if ((FRAMES_TOTAL - amtMemUsed) >= cp.getNumOfFrame()) {
+						/* Defrag */
+						System.out.println("time " + time + "ms: Cannot place process " + cp.getPid() + " -- starting defragmentation");
+						List<Process> movedProcesses = defragPhysicalMemory(mMemorySet, contiguousList, time, cp);
+						
+						/* Build results string */
+						int amtFramesMoved = 0;
+						StringBuilder result = new StringBuilder();
+						Iterator<Process> itrP = movedProcesses.iterator();
+						Process pTemp = null;
+						
+						while (itrP.hasNext()) {
+							pTemp = itrP.next();
+							amtFramesMoved += pTemp.getNumOfFrame();
+							result.append(pTemp.getPid());
+							if (itrP.hasNext()) result.append(", ");
+						}
+						
+						result.append(")");
+						
+						/* Add defrag delays to time*/
+						int delayTime = amtFramesMoved * t_menmove;
+						time += delayTime;
+						
+						/* Print completed defrag statement */
+						result.insert(0,  " frames: ").insert(0,  amtFramesMoved).insert(0,  "time " + time + "ms: Defragmentation complete (moved ");
+						System.out.println(result);
+						
+						Iterator<ContiguousProcess> itrCPList = contiguousList.iterator();
+						while (itrCPList.hasNext()) {
+							itrCPList.next().addDefragTime(0, delayTime);
+						}				
+						
+						printPhysicalMemory(mMemorySet);
+						
+						lastEmptyIndex = mMemorySet.last().getEndFrame() + 1;
+						amtFreeSpace = FRAMES_TOTAL - lastEmptyIndex;
+						if (amtFreeSpace >= cp.getNumOfFrame()) {
+							amtMemUsed = placeProcess(amtMemUsed, time, cp, lastEmptyIndex);
+						}
+					}
+					/* Skip Process */
+					else {
+						System.out.println("time " + time + "ms: Cannot place process " + cp.getPid() + " -- skipped!");
+						cp.pop(); cp.pop();
+					}
+				}
+			}
+			/* Remove Process from memory */
+			else {
+				cp.pop();
+				mMemorySet.remove(cp);
+				System.out.println("time " + time + "ms: Process " + cp.getPid() + " removed:");
+				printPhysicalMemory(mMemorySet);
+				cp.setStartFrame(-1);
+				cp.setEndFrame(-1);
+				amtMemUsed -= cp.getNumOfFrame();
+			}
+			
+			/* Add if times are not equal */
+			if (!cp.isDone()) {
+				processQueue.add(cp);
+			}
+		}
+		
+		System.out.println("time " + time + "ms: Simulator ended (Contiguous -- Best-Fit)");
 	}
 }
