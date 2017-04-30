@@ -25,8 +25,8 @@ public class Project2 {
 	}
 	
 	/**
+	 * the function parse data from the input text file (only for physical memory)
 	 * @param filename: the filename to be read
-	 * @effects parses data from text file and creates Process objects
 	 * @throws IOException
 	 */
 	public void parseDataPM(String filename) throws IOException{
@@ -34,11 +34,15 @@ public class Project2 {
 		String line = reader.readLine();
 		processQueue = new PriorityQueue<Process>(Integer.parseInt(line), new TimeComparator());
 		while((line = reader.readLine()) != null){
-			String[] token = line.split(" |/");
-			
+			String[] token = line.split("/|\\ ");
 			Process p = new Process(token[0], Integer.parseInt(token[1]));	//create a new process object, argument 1 is the PID, and argument 2 is the number of frames
 			for(int i = 2; i < token.length; i++){		// this for loop adds the time interval to the ArrayList returned by the process class
-				p.getTimeList().add(Integer.parseInt(token[i]));
+				if(i % 2 == 0){
+					p.getTimeList().add(Integer.parseInt(token[i]));
+				}
+				else{
+					p.getTimeList().add((Integer.parseInt(token[i]) + Integer.parseInt(token[i - 1])));
+				}
 			}
 			p.setStatus(true); 		//this line sets the initial process of a process to true, since it will enter the memory (please change the status whenever the process exits the memory)
 			processQueue.add(p);	//add the element to the queue, each element is an object of process.
