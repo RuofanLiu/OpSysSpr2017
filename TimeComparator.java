@@ -13,6 +13,10 @@ public class TimeComparator implements Comparator<Process> {
 			return 1;
 		}
 		else if(process1.peek() == process2.peek()){
+			if (!process1.getStatus() && process2.getStatus()) {
+				return -1;
+			}
+			
 			return process1.getPid().compareTo(process2.getPid());
 		}
 		return -1;
