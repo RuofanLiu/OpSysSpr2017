@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.PriorityQueue;
 import java.util.TreeSet;
 
+
 public class Project2 {
 
 	public static void main(String[] args) throws IOException{
@@ -21,6 +22,13 @@ public class Project2 {
 		System.out.println();
 		
 		p.bestFit();
+		System.out.println();
+		
+		p.worstFit();
+		System.out.println();
+		Project2 q=new Project2();
+		q.parseDataPM2(args[0]);
+		q.firstFitNonContiguous();
 	}
 	
 	private PriorityQueue<Process> processQueue;
@@ -333,7 +341,7 @@ public class Project2 {
 			
 			boolean isEntering = cp.getStatus();
 			while (cp.peek() < time) {
-				System.out.println("time " + time + "ms: Cannos place process " + cp.getPid() + " -- skippped!");
+				System.out.println("time " + time + "ms: Cannot place process " + cp.getPid() + " -- skippped!");
 				cp.pop(); cp.pop();
 				
 				printPhysicalMemory(mMemorySet);
@@ -450,6 +458,150 @@ public class Project2 {
 		
 		System.out.println("time " + time + "ms: Simulator ended (Contiguous -- Best-Fit)");
 	}
+	
+	
+	public void worstFit() {
+		int time = 0;
+		int amtMemUsed = 0;
+		PriorityQueue<Process> processQueue = new PriorityQueue<Process>(this.processQueue.size(), this.timeComparator);
+		mMemorySet = new TreeSet<>(memoryComparator);
+		
+		List<ContiguousProcess> contiguousList = new LinkedList<>();
+		for (Process process : this.processQueue) {
+			contiguousList.add(new ContiguousProcess(process));
+		}		
+		
+		processQueue.addAll(contiguousList);
+		
+		System.out.println("time " + time + "ms: Simulator started (Contiguous -- Worst-Fit)");
+		ContiguousProcess cp;
+		
+		while (processQueue.peek() != null) {
+			cp = (ContiguousProcess) processQueue.poll();
+			
+			boolean isEntering = cp.getStatus();
+			while (cp.peek() < time) {
+				System.out.println("time " + time + "ms: Cannot place process " + cp.getPid() + " -- skippped!");
+				cp.pop(); cp.pop();
+				
+				printPhysicalMemory(mMemorySet);
+			}
+			
+			time = cp.peek();
+			
+			/* Placement Algorithm */
+			if (isEntering) {
+				System.out.println("time " + time + "ms: Process " + cp.getPid() + " arrived (requires " + cp.getNumOfFrame() + " frames)");
+				
+				int lastEmptyIndex = 0;
+				int smallestSize = -1;
+				int smallestIndex = -1;
+				
+				int largestSize = -1;
+				int largestIndex = -1;
+				Iterator<ContiguousProcess> itrMem = mMemorySet.iterator();
+				boolean isPlaced = false;
+				ContiguousProcess cpLargest = null;
+				ContiguousProcess cpTemp = null;
+				
+				while (itrMem.hasNext()) {
+					cpTemp = itrMem.next();
+					int amtFreeSpace = cpTemp.getStartFrame() - lastEmptyIndex;
+					if (amtFreeSpace >= cp.getNumOfFrame()) {	//does it fit
+						if(largestSize<amtFreeSpace){		//is it bigger
+							largestSize=amtFreeSpace;
+							largestIndex=lastEmptyIndex;
+							cpLargest=cp;
+						}
+						isPlaced = true;
+					}
+					
+					lastEmptyIndex = cpTemp.getEndFrame() + 1;
+				}
+				int amtFreeSpace = FRAMES_TOTAL - lastEmptyIndex;
+				if (amtFreeSpace >= cp.getNumOfFrame()) {//fit
+					if(largestSize<amtFreeSpace){//biggest
+						largestSize=amtFreeSpace;
+						largestIndex=lastEmptyIndex;
+						cpLargest=cp;
+					}
+					isPlaced = true;
+				}
+				
+				/* Place Process */
+				if (isPlaced) {
+					amtMemUsed = placeProcess(amtMemUsed, time, cpLargest, largestIndex);
+				}
+				else {
+					if ((FRAMES_TOTAL - amtMemUsed) >= cp.getNumOfFrame()) {
+						/* Defrag */
+						System.out.println("time " + time + "ms: Cannot place process " + cp.getPid() + " -- starting defragmentation");
+						List<Process> movedProcesses = defragPhysicalMemory(mMemorySet, contiguousList, time, cp);
+						
+						/* Build results string */
+						int amtFramesMoved = 0;
+						StringBuilder result = new StringBuilder();
+						Iterator<Process> itrP = movedProcesses.iterator();
+						Process pTemp = null;
+						
+						while (itrP.hasNext()) {
+							pTemp = itrP.next();
+							amtFramesMoved += pTemp.getNumOfFrame();
+							result.append(pTemp.getPid());
+							if (itrP.hasNext()) result.append(", ");
+						}
+						
+						result.append(")");
+						
+						/* Add defrag delays to time*/
+						int delayTime = amtFramesMoved * t_menmove;
+						time += delayTime;
+						
+						/* Print completed defrag statement */
+						result.insert(0,  " frames: ").insert(0,  amtFramesMoved).insert(0,  "time " + time + "ms: Defragmentation complete (moved ");
+						System.out.println(result);
+						
+						Iterator<ContiguousProcess> itrCPList = contiguousList.iterator();
+						while (itrCPList.hasNext()) {
+							itrCPList.next().addDefragTime(0, delayTime);
+						}				
+						
+						printPhysicalMemory(mMemorySet);
+						
+						lastEmptyIndex = mMemorySet.last().getEndFrame() + 1;
+						amtFreeSpace = FRAMES_TOTAL - lastEmptyIndex;
+						if (amtFreeSpace >= cp.getNumOfFrame()) {
+							amtMemUsed = placeProcess(amtMemUsed, time, cp, lastEmptyIndex);
+						}
+					}
+					/* Skip Process */
+					else {
+						System.out.println("time " + time + "ms: Cannot place process " + cp.getPid() + " -- skipped!");
+						cp.pop(); cp.pop();
+					}
+				}
+			}
+			/* Remove Process from memory */
+			else {
+				cp.pop();
+				mMemorySet.remove(cp);
+				System.out.println("time " + time + "ms: Process " + cp.getPid() + " removed:");
+				printPhysicalMemory(mMemorySet);
+				cp.setStartFrame(-1);
+				cp.setEndFrame(-1);
+				amtMemUsed -= cp.getNumOfFrame();
+			}
+			
+			/* Add if times are not equal */
+			if (!cp.isDone()) {
+				processQueue.add(cp);
+			}
+		}
+		
+		System.out.println("time " + time + "ms: Simulator ended (Contiguous -- Worst-Fit)");
+	}
+	
+	
 	
 	/**
 	 * the function parse data from the input text file (only for non-contiguous physical memory)
